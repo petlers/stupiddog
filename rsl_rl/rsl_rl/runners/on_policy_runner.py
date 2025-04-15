@@ -39,7 +39,7 @@ import torch
 from rsl_rl.algorithms import PPO
 from rsl_rl.modules import ActorCritic, ActorCriticRecurrent
 from rsl_rl.env import VecEnv
-
+import wandb
 
 class OnPolicyRunner:
 
@@ -54,6 +54,14 @@ class OnPolicyRunner:
         self.policy_cfg = train_cfg["policy"]
         self.device = device
         self.env = env
+        self.use_wandb = True
+        if self.use_wandb:
+            wandb.init(
+                project="legged_gym_go2",
+                name=f"Run_{time.strftime('%Y%m%d_%H%M%S')}",
+                config=train_cfg,
+            )
+
         if self.env.num_privileged_obs is not None:
             num_critic_obs = self.env.num_privileged_obs 
         else:
@@ -134,6 +142,27 @@ class OnPolicyRunner:
             learn_time = stop - start
             if self.log_dir is not None:
                 self.log(locals())
+
+            if self.use_wandb:
+                wandb_log_data = {
+                    "loss/value_function": mean_value_loss,
+                    "loss/surrogate_loss": mean_surrogate_loss,
+                    "learning_rate": self.alg.learning_rate,
+                    "fps": int(self.num_steps_per_env * self.env.num_envs / (collection_time + learn_time)),
+                }
+                if len(rewbuffer) > 0:
+                    wandb_log_data["train/mean_reward"] = statistics.mean(rewbuffer)
+                    wandb_log_data["train/mean_episode_length"] = statistics.mean(lenbuffer)
+                if ep_infos:
+                    for key in ep_infos[0]:
+                        wandb_log_data[f"episode/{key}"] = torch.mean(
+                            torch.cat([
+                                ep_info[key].unsqueeze(0) if not isinstance(ep_info[key], torch.Tensor) else ep_info[
+                                    key].view(1)
+                                for ep_info in ep_infos
+                            ])
+                        ).item()
+                wandb.log(wandb_log_data, step=it)
             if it % self.save_interval == 0:
                 self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
             ep_infos.clear()

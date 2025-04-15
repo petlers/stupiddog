@@ -3,7 +3,7 @@ from legged_gym.envs.base.legged_robot_config import LeggedRobotCfg, LeggedRobot
 class Go2RoughCfg( LeggedRobotCfg ):
 
     class env( LeggedRobotCfg.env ):
-        num_envs = 4096
+        num_envs = 2048
         num_observations = 235
         symmetric = True  #True :  set num_privileged_obs = None;    false: num_privileged_obs = observations + 187 ,set "terrain.measure_heights" to true
         num_privileged_obs = 235#num_observations + 187 # if not None a priviledge_obs_buf will be returned by step() (critic obs for assymetric training). None is returned otherwise 
@@ -29,7 +29,7 @@ class Go2RoughCfg( LeggedRobotCfg ):
         max_init_terrain_level = 5 # starting curriculum state
         terrain_length = 12.
         terrain_width = 12.
-        num_rows= 9 # number of terrain rows (levels)
+        num_rows= 3 # number of terrain rows (levels)
         num_cols = 1 # number of terrain cols (types)
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
         terrain_proportions = [0,1, 0, 0, 0]
@@ -61,7 +61,7 @@ class Go2RoughCfg( LeggedRobotCfg ):
         resampling_time = 10. # time before command are changed[s]
         heading_command = True # if true: compute ang vel command from heading error
         class ranges:
-            lin_vel_x = [0.5, 2.0] # min max [m/s]
+            lin_vel_x = [1, 1] # min max [m/s]
             lin_vel_y = [0., 0.]   # min max [m/s]
             ang_vel_yaw = [0., 0.]    # min max [rad/s]
             heading = [0, 0]
@@ -101,23 +101,27 @@ class Go2RoughCfg( LeggedRobotCfg ):
 
     class rewards( LeggedRobotCfg.rewards ):
         class scales( LeggedRobotCfg.rewards.scales ):
-            termination = -0.
-            tracking_lin_vel = 2.0
-            tracking_ang_vel = 0.5
+            termination = -3.0
+            tracking_lin_vel = 0
+            tracking_lin_vel_x = 4.0
+            tracking_lin_vel_y = 1.0
+            tracking_ang_vel = 2.0
             lin_vel_z = -0.0
             ang_vel_xy = -0.01
-            orientation = -0.1
-            torques = -0.0002
+            orientation = -1
+            torques = -0.00002
             dof_vel = -2.5e-7
             dof_acc = -2.5e-7
-            base_height = -0. 
-            feet_air_time =  1.0
-            collision = -1.
-            feet_stumble = -0.0 
+            # base_height = 1.0
+            feet_air_time =  2.0
+            collision = -1.0
+            # feet_stumble = -0.1
             action_rate = -0.001
             stand_still = -0.1
             dof_pos_limits =-0.01
-            #goal_pos = 0.45
+            # foot_clearance_front = 2.0
+            pitch = 0.5
+            terrain_height = 2
 
 # step 1 
 # negtive reward -> -0.001
@@ -134,8 +138,9 @@ class Go2RoughCfg( LeggedRobotCfg ):
 # base_height = -0.01 -> base_height = -0.05
 # orientation =-0.0001  orientation= -0.1
 
-        only_positive_rewards = True # if true negative total rewards are clipped at zero (avoids early termination problems)
+        only_positive_rewards = False # if true negative total rewards are clipped at zero (avoids early termination problems)
         tracking_sigma = 0.25 # tracking reward = exp(-error^2/sigma)
+        tracking_sigma_pitch = 0.25
         soft_dof_pos_limit = 0.9 # percentage of urdf limits, values above this limit are penalized
         soft_dof_vel_limit = 1.
         soft_torque_limit = 1.
@@ -146,14 +151,14 @@ class Go2RoughCfgPPO( LeggedRobotCfgPPO ):
     class algorithm( LeggedRobotCfgPPO.algorithm ):
         entropy_coef = 0.01
     class runner( LeggedRobotCfgPPO.runner ):
-        run_name = ''
+        run_name = 'ME5406'
         experiment_name = 'rough_go2'
 
   
         policy_class_name = 'ActorCritic'
         algorithm_class_name = 'PPO'
         num_steps_per_env = 48 # per iteration
-        max_iterations = 6000 # number of policy updates
+        max_iterations = 1000 # number of policy updates
 
         # logging
         save_interval = 50 # check for potential saves every this many iterations

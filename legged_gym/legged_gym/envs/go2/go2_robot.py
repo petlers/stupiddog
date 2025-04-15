@@ -67,6 +67,9 @@ class Go2Robot(LeggedRobot):
         self.base_ang_vel[:] = quat_rotate_inverse(self.base_quat, self.root_states[:, 10:13])
         self.projected_gravity[:] = quat_rotate_inverse(self.base_quat, self.gravity_vec)
 
+        self.dof_pos = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 0]
+        self.dof_vel = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 1]
+
         self._post_physics_step_callback()
 
         # compute observations, rewards, resets, ...
@@ -178,52 +181,52 @@ class Go2Robot(LeggedRobot):
         # add noise if needed
         if self.add_noise:
             self.obs_buf += (2 * torch.rand_like(self.obs_buf) - 1) * self.noise_scale_vec
+
     def create_competition_map(self):
-        num_terains = 9
+        num_terains = 3
         terrain_width = self.cfg.terrain.terrain_width
         terrain_length = self.cfg.terrain.terrain_length
         horizontal_scale = self.cfg.terrain.horizontal_scale
         vertical_scale = self.cfg.terrain.vertical_scale
-        num_rows = int(terrain_width/horizontal_scale)
-        num_cols = int(terrain_length/horizontal_scale)
+        num_rows = int(terrain_width / horizontal_scale)
+        num_cols = int(terrain_length / horizontal_scale)
+
+        def new_sub_terrain(): return SubTerrain(width=num_rows, length=num_cols, vertical_scale=vertical_scale,
+                                                 horizontal_scale=horizontal_scale)
+
+        self.terrain.heightsamples[0:num_rows, :] = sloped_terrain(new_sub_terrain(), slope=0).height_field_raw
+        self.terrain.heightsamples[num_rows:2 * num_rows, :] = stairs_terrain(new_sub_terrain(), step_width=0.75,
+                                                                                  step_height=0.15).height_field_raw
+
+        self.terrain.heightsamples[2 * num_rows:3 * num_rows, :] = stairs_terrain(new_sub_terrain(), step_width=0.75,
+                                                                                  step_height=0.15,
+                                                                                  init_height=450).height_field_raw
 
 
-        def new_sub_terrain(): return SubTerrain(width=num_rows, length=num_cols, vertical_scale=vertical_scale, horizontal_scale=horizontal_scale)
-
-        self.terrain.heightsamples[0:num_rows, :] =  sloped_terrain(new_sub_terrain(), slope=0.0).height_field_raw
-        self.terrain.heightsamples[num_rows:2*num_rows, :] = pyramid_sloped_terrain(new_sub_terrain(), slope=-0.3).height_field_raw
-        #self.terrain.heightsamples[num_rows:2*num_rows, :] = sloped_terrain(new_sub_terrain(), slope=0.1).height_field_raw
-        self.terrain.heightsamples[2*num_rows:3*num_rows, :] = random_uniform_terrain(new_sub_terrain(), min_height=-0.15, max_height=0.15, step=0.2, downsampled_scale=0.5).height_field_raw
-        self.terrain.heightsamples[3*num_rows:4*num_rows,:] = discrete_obstacles_terrain(new_sub_terrain(), max_height=0.15, min_size=1., max_size=5., num_rects=20).height_field_raw
-        self.terrain.heightsamples[4*num_rows:5*num_rows,:] = wave_terrain(new_sub_terrain(), num_waves=2., amplitude=1.).height_field_raw
-        self.terrain.heightsamples[5*num_rows:6*num_rows, :] = stairs_terrain(new_sub_terrain(), step_width=0.75, step_height=0.25).height_field_raw
-        self.terrain.heightsamples[6*num_rows:7*num_rows, :] = stairs_terrain(new_sub_terrain(), step_width=0.75, step_height=-0.25,init_height=850).height_field_raw
-        #self.terrain.heightsamples[6*num_rows:7*num_rows,:48] = pyramid_stairs_terrain(new_sub_terrain(), step_width=0.75, step_height=-0.5).height_field_raw
-        self.terrain.heightsamples[7*num_rows:8*num_rows,:] = stepping_stones_terrain(new_sub_terrain(), stone_size=1.,
-                                                                        stone_distance=0.25, max_height=0.2, platform_size=0.).height_field_raw
-
-        
-        self.terrain.vertices, self.terrain.triangles = convert_heightfield_to_trimesh(self.terrain.heightsamples, horizontal_scale=horizontal_scale, vertical_scale=vertical_scale, slope_threshold=1.5)
+        self.terrain.vertices, self.terrain.triangles = convert_heightfield_to_trimesh(self.terrain.heightsamples,
+                                                                                       horizontal_scale=horizontal_scale,
+                                                                                       vertical_scale=vertical_scale,
+                                                                                       slope_threshold=1.5)
         tm_params = gymapi.TriangleMeshParams()
         tm_params.nb_vertices = self.terrain.vertices.shape[0]
         tm_params.nb_triangles = self.terrain.triangles.shape[0]
         tm_params.transform.p.x = -0.
         tm_params.transform.p.y = -0.
-        self.gym.add_triangle_mesh(self.sim, self.terrain.vertices.flatten(), self.terrain.triangles.flatten(), tm_params)
+        self.gym.add_triangle_mesh(self.sim, self.terrain.vertices.flatten(), self.terrain.triangles.flatten(),
+                                   tm_params)
 
         self.width_per_env_pixels = int(terrain_width / horizontal_scale)
         self.length_per_env_pixels = int(terrain_length / horizontal_scale)
 
-        self.border = int(self.cfg.terrain.border_size/self.cfg.terrain.horizontal_scale)
-        self.tot_cols = int(self.cfg.terrain.num_cols * self.width_per_env_pixels) #+ 2 * self.border
-        self.tot_rows = int(self.cfg.terrain.num_rows * self.length_per_env_pixels) #+ 2 * self.border
+        self.border = int(self.cfg.terrain.border_size / self.cfg.terrain.horizontal_scale)
+        self.tot_cols = int(self.cfg.terrain.num_cols * self.width_per_env_pixels)  # + 2 * self.border
+        self.tot_rows = int(self.cfg.terrain.num_rows * self.length_per_env_pixels)  # + 2 * self.border
 
-        self.height_field_raw = np.zeros((self.tot_rows , self.tot_cols), dtype=np.int16)
-        self.height_field_raw[:,:] = self.terrain.heightsamples[:,:]
+        self.height_field_raw = np.zeros((self.tot_rows, self.tot_cols), dtype=np.int16)
+        self.height_field_raw[:, :] = self.terrain.heightsamples[:, :]
 
-
-
-        self.height_samples = torch.tensor(self.height_field_raw).view(self.tot_rows, self.terrain.tot_cols).to(self.device)
+        self.height_samples = torch.tensor(self.height_field_raw).view(self.tot_rows, self.terrain.tot_cols).to(
+            self.device)
 
     def create_sim(self):
         """ Creates simulation, terrain and evironments
@@ -738,18 +741,33 @@ class Go2Robot(LeggedRobot):
             self.max_terrain_level = self.cfg.terrain.num_rows
             self.terrain_origins = torch.from_numpy(self.terrain.env_origins).to(self.device).to(torch.float)
             self.env_origins[:] = self.terrain_origins[self.terrain_levels, self.terrain_types]
-        elif self.cfg.terrain.mesh_type in ["competition"]:
+
+
+
+        if self.cfg.terrain.mesh_type in ["competition"]:
             self.custom_origins = False
             self.env_origins = torch.zeros(self.num_envs, 3, device=self.device, requires_grad=False)
 
-            self.env_origins[:,0:1] = torch_rand_float(6, 48, (self.num_envs,1), device=self.device)
-            self.env_origins[:,1:2] = torch_rand_float(4, 8, (self.num_envs,1), device=self.device)
+                    # 这里！！改成只在第一块平地上随机
+                    # 第一块是 self.terrain.heightsamples[0:num_rows, :]
+                    # 所以在 x 方向，随机 0 到 terrain_length
+                    # 在 y 方向，随机 0 到 terrain_width
+                    # （你这里 terrain 是平铺的，0-长度，0-宽度）
 
-            indices = torch.where((self.env_origins[:, 0:1] >= 60) & (self.env_origins[:, 0:1] <= 72))[0]
-            self.env_origins[indices, 2:3] = 0.33 * (self.env_origins[indices, 0:1] - 60)+0.3
+            num_rows = int(self.cfg.terrain.terrain_width / self.cfg.terrain.horizontal_scale)
+            num_cols = int(self.cfg.terrain.terrain_length / self.cfg.terrain.horizontal_scale)
 
-            indices = torch.where((self.env_origins[:, 0:1] >= 72) & (self.env_origins[:, 0:1] <= 84))[0]
-            self.env_origins[indices, 2:3] = 3.7 - 0.33 * (self.env_origins[indices, 0:1] - 72)
+                    # 第一块平地的 x 区间是 [0, terrain_length]
+                    # 注意，不是 [6, 48] 了，改成平地的长宽！！
+            self.env_origins[:, 0:1] = torch_rand_float(5, 10, (self.num_envs, 1),
+                                                                device=self.device)
+
+                    # 第一块平地的 y 区间也是 [0, terrain_width]
+            self.env_origins[:, 1:2] = torch_rand_float(2, 10, (self.num_envs, 1),
+                                                                device=self.device)
+
+                    # 第一段平地高度很低，可以直接设 z=0（如果有很小的初始高度，也可以加一点点比如 0.2）
+            self.env_origins[:, 2:3] = 0.1
 
         else:
             self.custom_origins = False
@@ -812,6 +830,24 @@ class Go2Robot(LeggedRobot):
         points[:, :, 1] = grid_y.flatten()
         return points
 
+    def _get_foot_heights(self):
+        """Get terrain height below each foot."""
+        foot_positions = self.rigid_body_states[:, self.feet_indices, :2]
+        # print("Foot positions xy: ", foot_positions)
+        points = foot_positions / self.terrain.cfg.horizontal_scale
+        points = points.long()
+
+        px = torch.clip(points[:, :, 0], 0, self.height_samples.shape[0] - 2)
+        py = torch.clip(points[:, :, 1], 0, self.height_samples.shape[1] - 2)
+
+        heights1 = self.height_samples[px, py]
+        heights2 = self.height_samples[px + 1, py]
+        heights3 = self.height_samples[px, py + 1]
+        heights = torch.min(heights1, heights2)
+        heights = torch.min(heights, heights3)
+
+        return heights * self.terrain.cfg.vertical_scale
+
     def _get_heights(self, env_ids=None):
         """ Samples heights of the terrain at required points around each robot.
             The points are offset by the base's position and rotated by the base's yaw
@@ -857,9 +893,9 @@ class Go2Robot(LeggedRobot):
         return heights.view(self.num_envs, -1) * self.terrain.cfg.vertical_scale
 
     #------------ reward functions----------------
-    def _reward_lin_vel_z(self):
-        # Penalize z axis base linear velocity
-        return torch.square(self.base_lin_vel[:, 2])
+    # def _reward_lin_vel_z(self):
+    #     # Penalize z axis base linear velocity
+    #     return torch.square(self.base_lin_vel[:, 2])
     
     def _reward_ang_vel_xy(self):
         # Penalize xy axes base angular velocity
@@ -869,10 +905,10 @@ class Go2Robot(LeggedRobot):
         # Penalize non flat base orientation
         return torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1)
 
-    def _reward_base_height(self):
-        # Penalize base height away from target
-        base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
-        return torch.square(base_height - self.cfg.rewards.base_height_target)
+    # def _reward_base_height(self):
+    #     # Penalize base height away from target
+    #     base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
+    #     return torch.square(base_height - self.cfg.rewards.base_height_target)
     
     def _reward_torques(self):
         # Penalize torques
@@ -913,10 +949,15 @@ class Go2Robot(LeggedRobot):
         # penalize torques too close to the limit
         return torch.sum((torch.abs(self.torques) - self.torque_limits*self.cfg.rewards.soft_torque_limit).clip(min=0.), dim=1)
 
-    def _reward_tracking_lin_vel(self):
-        # Tracking of linear velocity commands (xy axes)
-        lin_vel_error = torch.sum(torch.square(self.commands[:, :2] - self.base_lin_vel[:, :2]), dim=1)
-        return torch.exp(-lin_vel_error/self.cfg.rewards.tracking_sigma)
+    def _reward_tracking_lin_vel_x(self):
+        # Tracking of linear velocity in x-axis only.
+        lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0])
+        return torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
+
+    def _reward_tracking_lin_vel_y(self):
+        # Tracking of linear velocity command in y-axis only.
+        lin_vel_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1])
+        return torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
     
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw) 
@@ -948,6 +989,78 @@ class Go2Robot(LeggedRobot):
     def _reward_feet_contact_forces(self):
         # penalize high contact forces
         return torch.sum((torch.norm(self.contact_forces[:, self.feet_indices, :], dim=-1) -  self.cfg.rewards.max_contact_force).clip(min=0.), dim=1)
+
+    def _reward_base_height(self):
+        base_height = self.root_states[:, 2]
+        ground_height_estimate = torch.mean(self.measured_heights, dim=1)
+        base_target_height = ground_height_estimate + 0.35  # 期望离地25cm
+        height_error = base_height - base_target_height
+        reward = torch.exp(-height_error ** 2 / (0.1 ** 2))
+        return reward
+
+    def _reward_foot_clearance(self):
+        foot_pos = self.rigid_body_states[:, self.feet_indices, :3]  # 实时获取
+        # print("foot pos: ", foot_pos)
+        foot_heights = self._get_foot_heights()
+        # print("Foot heights: ", foot_heights)
+        clearance = foot_pos[:, :, 2] - foot_heights
+        reward = torch.sum(clearance, dim=1)
+        return reward
+
+    def _reward_foot_clearance_front(self):
+        # 假设 self.feet_indices 的前两条代表前腿
+        front_leg_indices = self.feet_indices[:2]
+        # 实时从刚体状态中获取前腿位置
+        front_foot_pos = self.rigid_body_states[:, front_leg_indices, :3]  # shape: (num_envs, 2, 3)
+        # 同时获取对应前腿下方地面高度
+        front_foot_heights = self._get_foot_heights()[:, :2]  # shape: (num_envs, 2)
+
+        # 计算每条腿与地面的差值，即离地高度
+        clearance = front_foot_pos[:, :, 2] - front_foot_heights  # shape: (num_envs, 2)
+
+        # 只奖励正离地部分，负数（表示脚低于地面）设置为 0
+        clearance = torch.clip(clearance, min=0.0)
+
+        # 奖励为两个前腿 clearance 之和
+        reward = torch.sum(clearance, dim=1)
+        return reward
+
+    def _reward_pitch(self):
+        # 从机器人 base 的四元数中获取 roll, pitch, yaw
+        roll, pitch, yaw = get_euler_xyz(self.base_quat)
+        # 目标 pitch 设为 -10°（约 -0.1745 rad）
+        target_pitch = -10 * np.pi / 180
+        # 计算平方误差
+        error_sq = (pitch - target_pitch) ** 2
+        # 使用指数函数给奖励，tracking_sigma_pitch 是调节平滑程度的超参数
+        # 你需要在配置中设置，比如 self.cfg.rewards.tracking_sigma_pitch = 0.01 或其他合适的数值
+        reward = torch.exp(-error_sq / self.cfg.rewards.tracking_sigma_pitch)
+        return reward
+
+        return reward
+
+    def _reward_terrain_height(self):
+        """
+        奖励函数：对机器人脚下的地形高度进行奖励，
+        鼓励机器人爬楼梯，即当脚下的地形高度越高时，奖励越大。
+        """
+        # 1. 获取每只脚下的地形高度，形状为 (num_envs, num_feet)
+        foot_heights = self._get_foot_heights()
+
+        # 2. 计算所有脚下地形高度的均值（这样可以避免因单脚数据异常而导致噪声过大）
+        avg_ground_height = torch.mean(foot_heights, dim=1)
+
+        # 3. 设置一个基准高度。这里我们假设在平地上机器人脚下的平均高度应该接近 (base_height_target - 0.1)
+        # 当机器人爬楼梯时，我们希望这个值能提升，从而获得正奖励。
+        baseline = self.cfg.rewards.base_height_target - 0.1  # 可以根据实际情况调整这个数值
+
+        # 4. 奖励值定义为：平均地形高度与基准之间的差值。
+        # 如果 avg_ground_height 大于 baseline，说明机器人爬上了更高的台阶，这里给予正向奖励；
+        # 否则，当差值为负时，我们可以 clip 成 0（也可以保留负奖励视为惩罚，视你策略设计而定）。
+        reward = avg_ground_height - baseline
+        reward = torch.clip(reward, min=0.0)
+
+        return reward
 
     # def _reward_feet_height(self):
     #     # penalize feet too low

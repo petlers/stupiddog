@@ -11,6 +11,11 @@ license agreement from NVIDIA CORPORATION is strictly prohibited.
 import torch
 import numpy as np
 
+def wrap_to_pi(angles):
+    angles %= 2*np.pi
+    angles -= 2*np.pi * (angles > np.pi)
+    return angles
+
 
 def to_torch(x, dtype=torch.float, device='cuda:0', requires_grad=False):
     return torch.tensor(x, dtype=dtype, device=device, requires_grad=requires_grad)
@@ -132,7 +137,7 @@ def get_basis_vector(q, v):
     return quat_rotate(q, v)
 
 
-def get_axis_params(value, axis_idx, x_value=0., dtype=np.float, n_dims=3):
+def get_axis_params(value, axis_idx, x_value=0., dtype=float, n_dims=3):
     """construct arguments to `Vec` according to axis index.
     """
     zs = np.zeros((n_dims,))
@@ -170,7 +175,9 @@ def get_euler_xyz(q):
         q[:, qx] - q[:, qy] * q[:, qy] - q[:, qz] * q[:, qz]
     yaw = torch.atan2(siny_cosp, cosy_cosp)
 
-    return roll % (2*np.pi), pitch % (2*np.pi), yaw % (2*np.pi)
+    # return roll % (2*np.pi), pitch % (2*np.pi), yaw % (2*np.pi)
+    return wrap_to_pi(roll), wrap_to_pi(pitch), wrap_to_pi(yaw)
+
 
 
 @torch.jit.script
