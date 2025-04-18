@@ -1,0 +1,46 @@
+{
+  "os": "Linux-5.15.0-136-generic-x86_64-with-glibc2.17",
+  "python": "CPython 3.8.20",
+  "startedAt": "2025-04-15T17:27:01.773948Z",
+  "args": [
+    "--task=go2",
+    "--headless"
+  ],
+  "program": "train.py",
+  "codePath": "legged_gym/legged_gym/scripts/train.py",
+  "git": {
+    "remote": "git@github.com:zhuganzhang/legged-gym-training.git",
+    "commit": "8576fa3da49ca03e0661bdadd3cb59f72063d3ea"
+  },
+  "email": "ruxuan_zhang@outlook.com",
+  "root": "/home/ruxuan/project/legged_robot_stairs/legged_gym/legged_gym/scripts",
+  "host": "ruxuan-Jiaolong-Series-GM5NG0O",
+  "executable": "/home/ruxuan/anaconda3/envs/5406/bin/python",
+  "codePathLocal": "train.py",
+  "cpu_count": 8,
+  "cpu_count_logical": 16,
+  "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "83954655232",
+      "used": "74598428672"
+    }
+  },
+  "memory": {
+    "total": "16677400576"
+  },
+  "cpu": {
+    "count": 8,
+    "countLogical": 16
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce RTX 3060 Laptop GPU",
+      "memoryTotal": "6442450944",
+      "cudaCores": 3840,
+      "architecture": "Ampere"
+    }
+  ],
+  "cudaVersion": "12.2"
+}
