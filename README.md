@@ -15,13 +15,10 @@ Ubuntu 20.04.6 LTS
 ```sh
 conda create -n 5406 python=3.8
 conda activate 5406
-pip install tensorboard wandb pyparsing cycler kiwisolver six
+pip install tensorboard wandb matplotlib
 cd rsl_rl && pip install -e .
-cd ..
-cd isaacgym/python && pip install -e .
-cd ..
-cd ..
-cd legged_gym && pip install -e .
+cd ../isaacgym/python && pip install -e .
+cd ../../legged_gym && pip install -e .
 ```
 
 ### To play the trained policy:
@@ -30,7 +27,7 @@ Go to legged_gym/legged_gym/scripts,
 ```sh
 python play.py --task=go2
 ```
-This loads a trained policy and run the robot in simulation environment.
+This loads a trained policy from legged_gym/logs/go2 and run the robot in simulation environment.
 
 ### If you want to train by yourself,
 In legged_gym/legged_gym/scripts,

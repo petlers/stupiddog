@@ -188,7 +188,6 @@ class Go2Robot(LeggedRobot):
             self.obs_buf += (2 * torch.rand_like(self.obs_buf) - 1) * self.noise_scale_vec
 
     def create_competition_map(self):
-        num_terains = 3
         terrain_width = self.cfg.terrain.terrain_width
         terrain_length = self.cfg.terrain.terrain_length
         horizontal_scale = self.cfg.terrain.horizontal_scale
@@ -352,7 +351,7 @@ class Go2Robot(LeggedRobot):
             self._push_robots()
 
     def _resample_commands(self, env_ids):
-        """ Randommly select commands of some environments
+        """ Randomly select commands of some environments
 
         Args:
             env_ids (List[int]): Environments ids for which new commands are needed
@@ -407,12 +406,12 @@ class Go2Robot(LeggedRobot):
         return torch.clip(torques, -self.torque_limits, self.torque_limits)
 
     def _reset_dofs(self, env_ids):
-        """ Resets DOF position and velocities of selected environmments
+        """ Resets DOF position and velocities of selected environments
         Positions are randomly selected within 0.5:1.5 x default positions.
         Velocities are set to zero.
 
         Args:
-            env_ids (List[int]): Environemnt ids
+            env_ids (List[int]): Environment ids
         """
         self.dof_pos[env_ids] = self.default_dof_pos * torch_rand_float(0.5, 1.5, (len(env_ids), self.num_dof),
                                                                         device=self.device)
@@ -468,7 +467,7 @@ class Go2Robot(LeggedRobot):
             # don't change on initial reset
             return
         distance = torch.norm(self.root_states[env_ids, :2] - self.env_origins[env_ids, :2], dim=1)
-        # robots that walked far enough progress to harder terains
+        # robots that walked far enough progress to harder terrains
         move_up = distance > self.terrain.env_length / 2
         # robots that walked less than half of their required distance go to simpler terrains
         move_down = (distance < torch.norm(self.commands[env_ids, :2],
@@ -583,7 +582,7 @@ class Go2Robot(LeggedRobot):
             self.height_points = self._init_height_points()
         self.measured_heights = 0
 
-        # random motor lenth
+        # random motor length
         str_rng = self.cfg.domain_rand.motor_strength_range
         self.motor_strength = (str_rng[1] - str_rng[0]) * torch.rand(2, self.num_envs, self.num_dof, dtype=torch.float,
                                                                      device=self.device, requires_grad=False) + str_rng[
@@ -608,7 +607,7 @@ class Go2Robot(LeggedRobot):
         self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
 
     def _prepare_reward_function(self):
-        """ Prepares a list of reward functions, whcih will be called to compute the total reward.
+        """ Prepares a list of reward functions, which will be called to compute the total reward.
             Looks for self._reward_<REWARD_NAME>, where <REWARD_NAME> are names of all non zero reward scales in the cfg.
         """
         # remove zero scales + multiply non-zero ones by dt
@@ -779,7 +778,7 @@ class Go2Robot(LeggedRobot):
 
     def _get_env_origins(self):
         """ Sets environment origins. On rough terrain the origins are defined by the terrain platforms.
-            Otherwise create a grid.
+            Otherwise, create a grid.
         """
         if self.cfg.terrain.mesh_type in ["heightfield", "trimesh"]:
             self.custom_origins = True
