@@ -1,4 +1,4 @@
-# ME5406 Part 2 Project
+# Legged Gym Project
 This project uses Legged Gym simulation framework to train Go2 quadruped robot for stair-climbing using reinforcement learning.
    
 ## Usage
